@@ -541,7 +541,7 @@ export const abi = [
     "type": "receive"
   }
 ]
-  export const NFT_CONTRACT_ADDRESS = "ipfs://bafkreicbawixjoftu5blnf6ajpkaf4nglvuxmmtmhx6kt6eaji2waqif7i/";
+  export const NFT_CONTRACT_ADDRESS = "0x1df162E8Ea2421ee0c68Fc6fA40251CBc681F082";
 
 
   export const whitelistContract_ABI = [

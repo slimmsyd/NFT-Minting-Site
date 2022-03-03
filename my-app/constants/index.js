@@ -115,6 +115,19 @@ export const abi = [
   },
   {
     "inputs": [],
+    "name": "_baseTokenURI",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "_paused",
     "outputs": [
       {
@@ -541,7 +554,7 @@ export const abi = [
     "type": "receive"
   }
 ]
-  export const NFT_CONTRACT_ADDRESS = "0x54B0Ef51155f26694Ba1dA120dC807281A6F6729";
+  export const NFT_CONTRACT_ADDRESS = "0x45947a32d06DD6FF00B7983c2B36f21f7a411f6b";
 
 
   export const whitelistContract_ABI = [

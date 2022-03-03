@@ -286,39 +286,6 @@ export const abi = [
   },
   {
     "inputs": [],
-    "name": "presaleEnded",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "presaleMint",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "presaleStarted",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "renounceOwnership",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -402,13 +369,6 @@ export const abi = [
       }
     ],
     "name": "setPaused",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "startPresale",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -582,7 +542,7 @@ export const abi = [
   }
 ]
 
-  export const NFT_CONTRACT_ADDRESS = "0xc6802E4DBa52063a642Ca086a7258a23d4DC160C";
+  export const NFT_CONTRACT_ADDRESS = "0x3bcedB2a83774C028ac7cB59e5C6a8166ED8E416";
 
 
   export const whitelistContract_ABI = [

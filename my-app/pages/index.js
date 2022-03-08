@@ -1,16 +1,18 @@
 import Head from 'next/head'
 import Image from 'next/image'
 import styles from '../styles/Home.module.css'
-import React, {useState, useEffect} from 'react'; 
-import {ethers, Contract, utilis, utils} from 'ethers';
+import React, {useState, useEffect, useRef} from 'react'; 
+import {ethers, Contract, utilis, utils, providers, BigNumber} from 'ethers';
 import { Web3Provider } from '@ethersproject/providers';
 import Nav from './Nav';
 import swal from 'sweetalert';
 import Web3 from 'web3';
+import Web3Modal from 'web3modal';
+
 
 
 //Web3 Imports
-import {WHITELISTADDRESS, whitelistContract_ABI, abi, NFT_CONTRACT_ADDRESS} from '../constants';
+import {WHITELISTADDRESS, whitelistContract_ABI, abi, NFT_CONTRACT_ADDRESS, TOKEN_ABI, TOKEN_CONTRACT_ADDRESS} from '../constants';
 import { getJsonWalletAddress } from 'ethers/lib/utils';
 
 export default function Home( ) {
@@ -19,21 +21,192 @@ export default function Home( ) {
   const [joinedWhitelist, setJoinedWhitelist] = useState(false);
   const [numberOfWhitelisted, setNumberOfWhitelisted] = useState(0);
 
+  //token states
+  const [ownerTokenId, setOwnerTokenId] = useState(0);
+  //Create A BigNumber "0'
+  const zero = BigNumber.from(0);
+  //tokensToBeClaimed keeps track of the humber of tokens that can be claiemd
+  //based no the Family NFT help by the user for which they havn'et claimed tokens
+  const [tokensToBeClaimed, setTokensToBeclaimed] = useState(zero);
+  //balanceofToken keeps track of number of Family Members tokens owned by address
+  const [balanceOfFamilyToken, setBalanceOfFamilyToken] = useState(zero);
+  //Amount of tokens that user wants to mint;
+  const [tokenAmount, setTokenAmount] = useState(zero);
+  //tokensMinted is the total number of tokens have been minted till now out of 10000(max total supply);
+  const [tokensMinted, setTokensMinted] = useState(zero);
+
 
   
   //All the connection stuff
-
+  //Note To Self, Don't put useRef in []
+  const web3Modalref = useRef()
   const [isConnected ,setIsConnected] = useState(false); 
   const [hasMetaMask, setHasMetaMask] = useState(false); 
   const [signer,setSigner] = useState(undefined);
   const [accountAddress, setAccountAddress] = useState("");
   const [loading, setLoading] = useState(false);
 
+  //Token Contract Funcions below
+
+  const getTokensToBeClaimed = async() => { 
+    try { 
+      const provider = await getProviderOrSigner();
+      //create a new instance of NFT contract
+      const nftContract = new Contract(
+        NFT_CONTRACT_ADDRESS,
+        abi,
+        provider
+      );
+     
+        //signer to attract address of currenty connect metamask account
+        const signer = await getProviderOrSigner(true);
+        const address = signer.getAddress();
+        const tokenContract = new Contract (
+          TOKEN_CONTRACT_ADDRESS,
+          TOKEN_ABI,
+          provider
+        )
+        //call the balanceOF from the NFT contract to get the number of NFTS held by user
+        const balance = await nftContract.balanceOf(address);
+        //balance is a Big number and thust we would compare it with Big Number 'zero'
+        if(balance ===zero) { 
+          setTokensToBeclaimed(zero);
+        }else { 
+          //amount keeps track of the # of unclaimed tokens
+          var amount = 0;
+          //For all the NFTS, check if the tokens have already been claimed
+          //Only increase the amount if the tokens have not been claimed
+          //for a an NFT(for a given tokenID)
+          for(var i = 0; i < balance;i++) { 
+            const tokenId = await nftContract.tokenOfOwnerByIndex(address, i );
+            const claimed  = await tokenContract.tokenIdsClaimed(tokenId);
+            if(!claimed) { 
+              amount++;
+            }
+          };
+
+          //tokensToBeClaimed has been initizlied to a big Number, thus we would conver amount
+          //to a big number and then set its value
+          setTokensToBeclaimed(BigNumber.from(amount));
+        }
+
+
+    }catch(err) { 
+      console.error(err)
+    }
+  };
+
+  //Checks balance of Tokens held by an address
+  const getBalanceOfNfts = async() => { 
+    try { 
+      const proivder = await getProviderOrSigner();
+      //create a instance of token contract
+      const tokenContract = new Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_ABI,
+        proivder
+      );
+        const signer = await getProviderOrSigner(true);
+        const address = signer.getAddress();
+        const balance = await tokenContract.balanceOf(address);
+        setBalanceOfFamilyToken(balance);
+    }catch(err) { 
+      console.error(err)
+      setBalanceOfFamilyToken(zero);
+    };
+  };
+
+  //mints 'amount' number of tokens to a given address
+  
+  const mintFamilyToken = async(amount) => {
+
+    try {
+      const signer = await getProviderOrSigner(true);
+      const tokenContract = new Contract(
+      TOKEN_CONTRACT_ADDRESS,
+      TOKEN_ABI,
+      signer
+    );
+    //each token is of '0.001 ether' The value we need to send is '0.001 amount'
+    const value = 0.001 * amount;
+    const tx = await tokenContract.mint(amount, {
+
+      value: utils.parseEther(value.toString())
+    });
+    setLoading(true);
+    //wait for transaction to get mined
+    await tx.wait();
+    setLoading(false);
+    swal("You mined a Family Token");
+    await getBalanceOfNfts();
+    await getTokensToBeClaimed();
+    await getTotalTokensMinted()
+    }catch(err) { 
+      console.error(err)
+    }
+    
+    
+
+  };
+
+  //helps the user claim tokens
+  const claimCryptoDevTokens = async() => { 
+      try {
+        const signer = await  getProviderOrSigner(true);
+
+        const tokenContract = new Contract(
+          TOKEN_CONTRACT_ADDRESS,
+          TOKEN_ABI,
+          signer
+        );
+        const tx = await tokenContract.claim();
+        setLoading(true);
+        await tx.wait();
+        setLoading(false);
+        swal("You claimed your Faimly Tokens");
+        await getBalanceOfNfts();
+        await getTokensToBeClaimed();
+        await getTotalTokensMinted()
+      }catch(err) { 
+        console.error(err)
+      }
+  };
+
+  //retrives how many tokens have been minted till now
+  //out of total supply
+  
+  async function getTotalTokensMinted() { 
+    try { 
+      const provider = await getProviderOrSigner(true);
+      const tokenContract = new Contract(
+        TOKEN_CONTRACT_ADDRESS,
+        TOKEN_ABI,
+        provider
+      );
+         //Get all Tokens that have been mined
+         const _tokensMinted = await tokenContract.totalSupply();
+         console.log(_tokensMinted, "checking this out ")
+
+         setTokensMinted(_tokensMinted);
+    }catch(err) { 
+      console.error(err)
+    };
+  }
+
+
+
+
+
+  //Token Contract Funcions Above
+
+
+
 
 async function getProviderOrSigner(needSigner = false) { 
-  await window.ethereum.request({method: "eth_requestAccounts"});
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  const signer = provider.getSigner();
+
+  const provider = await web3Modalref.current.connect();
+  const web3Provider = new providers.Web3Provider(provider)
+  const signer = web3Provider.getSigner();
   const address = await signer.getAddress();
 
   //Split The Adress String Up
@@ -46,7 +219,7 @@ async function getProviderOrSigner(needSigner = false) {
 
   //If user is not connected to rinkeby network let them know
 
-  const {chainId} = await provider.getNetwork(); 
+  const {chainId} = await web3Provider.getNetwork(); 
   if (chainId !== 4) { 
     window.alert("Change Network To Rinkeby");
     throw new  Error("Change Network To Rinkeby")
@@ -54,27 +227,17 @@ async function getProviderOrSigner(needSigner = false) {
 
 
   if(needSigner) { 
-    const signer = provider.getSigner();
+    const signer = web3Provider.getSigner();
     return signer
   }
-  return provider
+  return web3Provider;
 
 };
 
 
 
 
-useEffect(() => {
-  if (typeof window.ethereum !== "undefined") {
-    setHasMetaMask(true);
-    Connect();
 
-  }
- 
-
-  
-
-});
 
 
 //ADDRESS TO WHITELIST 
@@ -100,6 +263,44 @@ const getNumberOfWhitelisted = async () => {
     console.error(err);
   }
 };
+
+//code converts a string to int
+function toInt(string) { 
+  var value = parseInt(string)
+  return value;
+}
+
+const checkIfSenderHasToken = async() => { 
+  try { 
+    const provider = await getProviderOrSigner(true);
+
+    const nftContract  = new Contract(
+     //New Contract Goes Address, ABI, Provider
+     NFT_CONTRACT_ADDRESS,
+     abi,
+     provider
+
+    );
+    //For my code sake, convert to string then back to int
+      const _checkIfOwnerHasToken = await nftContract.returnTokenId();
+      const _checkIfOwnerHasToken_toString = _checkIfOwnerHasToken.toString();
+      const amount = toInt(_checkIfOwnerHasToken_toString);
+      
+       setOwnerTokenId(amount)
+     
+
+    
+      
+      
+  }catch(err) { 
+    console.error(err)
+  }
+
+
+
+}
+
+
 
 const addAddressToWhitelist = async() => { 
   try { 
@@ -155,8 +356,6 @@ const checkIfAddressInWhitelist = async () => {
 
 
 
-
-
 const connectToSite = () => { 
   return( 
     
@@ -172,17 +371,37 @@ async function Connect() {
     //Get provider from ethers; 
     await getProviderOrSigner()
     setIsConnected(true);
-
     getNumberOfWhitelisted();
-    getTokenIdsMinted()
     checkIfAddressInWhitelist();
     getOwner();
+    getTokenIdsMinted();
+    getBalanceOfNfts();
+    checkIfSenderHasToken();
+    getTokensToBeClaimed()
+    getTotalTokensMinted();
     console.log(isConnected);
   }catch(err) { 
     console.error(err)
   }
-}
+};
 
+
+useEffect(() => {
+  if(!isConnected) { 
+    web3Modalref.current = new Web3Modal({
+      network: "rinkeby",
+      providerOptions: {},
+      disableInjectedProvider: false,
+    });
+      Connect();
+
+
+
+  }
+
+  
+
+});
 //MINTING FUNCTIONS 
 const [tokenIdsMinted, setTokenIdsMinted] = useState(0);
 const [isOwner, setIsOwner] = useState(false); 
@@ -341,23 +560,41 @@ const getTokenIdsMinted = async() => {
 }
 }
 
-
 const renderButton = () => { 
-  if(isConnected) { 
-    if(joinedWhitelist) { 
-      return (
-        <div className = {styles.card} >
-        <h1>THANKS for joining the whitlist</h1>  
 
-         </div>
-      );
+  
+  if(loading)  { 
+    return ( 
+      <div>
+        <button className = {styles.mint}>Loading</button>
+      </div>
+    )
+  }
+  if(isConnected) { 
+    if(ownerTokenId === 1) {
+      if(tokensToBeClaimed > 0 ) {
+        return (
+          <div className={styles.card}>
+              <div className = {styles.card} >
+          <h3>You Own A Nft</h3>  
+           </div>
+           <div className = {styles.card}>
+             {tokensToBeClaimed * 10} Tokens can be claimed!!
+           </div>
+           <button className = {styles.mint} onClick = {claimCryptoDevTokens}>Claim Your Tokens</button>
+          </div>
+        
+           
+        );
+      } 
+      
     }else if(loading) { 
       return <button className = {styles.mint}>Loading...</button>
     }else {
       return(
         <div className = {styles.card}>
-          <button onClick = {addAddressToWhitelist} className = {styles.mint}>
-          Join The whitlist 
+          <button onClick = {publicMint} className = {styles.mint}>
+          Mint NFT
         </button>
         </div>
       
@@ -367,6 +604,24 @@ const renderButton = () => {
   }else {
     connectToSite();
   }
+  return (
+    <div>
+      <input
+      type = "numeber"
+      placeholder='Amount Of Tokens'
+      //Big number.from converts the 'e.target.value' to a BigNumebr
+      onChange={(e) => setTokenAmount(BigNumber.from(e.target.value))}>
+        
+      </input>
+      <button
+      className = {styles.mint}
+      disabled = {!tokenAmount > 0}
+      onClick = {() => mintFamilyToken(tokenAmount)}>
+        Mint Tokens
+      </button>
+
+    </div>
+  )
 
 
 }
@@ -434,19 +689,23 @@ const renderButton = () => {
             <h1 className={styles.title}>
               Welcome to <a href="#">Family DAO</a>
             </h1>
-
-
-          
-          <div className = {styles.card} >
-            <button onClick={publicMint} className = {styles.mint}>MINT A FAMILY NFT</button>  
+            <p className={styles.description}>
+              You can claim or mint your Tokens Here
+            </p>
+         
             </div>
-            </div>
+            <div className={styles.card}>
 
+                You have minted {utils.formatEther(balanceOfFamilyToken)} Family Tokens
+            </div>
+            <div className = {styles.card}>
+              Overall {utils.formatEther(tokensMinted)}/10000 have minted 
+            </div>
             {renderButton()}
             
           <div className = {styles.card} >
             <h1>{numberOfWhitelisted} have already joined the whitelist</h1>  
-            <h1>This about minted {tokenIdsMinted}</h1>
+            <h1>NFTS current claimed {tokenIdsMinted} / 5</h1>
             </div>
         
      
